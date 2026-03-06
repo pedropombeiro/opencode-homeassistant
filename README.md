@@ -161,4 +161,4 @@ automation:
 
 ## License
 
-MIT
+[MIT](LICENSE)

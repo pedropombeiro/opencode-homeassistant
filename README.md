@@ -61,7 +61,7 @@ Create `~/.config/opencode/opencode-homeassistant.json`:
 }
 ```
 
-The config file path can be overridden with the `OPENCODE_HA_CONFIG_PATH` environment variable.
+The config file path can be overridden with the `OPENCODE_HA_CONFIG_PATH` environment variable. See [webhook trigger documentation at Home Assistant]([url](https://www.home-assistant.io/docs/automation/trigger/#webhook-trigger)).
 
 If `webhookUrl` is empty or the config file is missing, the plugin is disabled silently.
 

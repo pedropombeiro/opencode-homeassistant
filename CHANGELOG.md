@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.6](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.5...opencode-homeassistant-v0.2.6) (2026-03-06)
+
+
+### Bug Fixes
+
+* **ci:** remove workarounds for trusted publishing OIDC ([8002069](https://github.com/pedropombeiro/opencode-homeassistant/commit/80020696260519b379e241c754355ac59243a408))
+
 ## [0.2.5](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.4...opencode-homeassistant-v0.2.5) (2026-03-06)
 
 

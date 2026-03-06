@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Symlink dist into ~/.config/opencode/plugins/ for local testing"
+PLUGIN_DIR="$HOME/.config/opencode/plugins"
+LINK="$PLUGIN_DIR/opencode-homeassistant.js"
+mkdir -p "$PLUGIN_DIR"
+ln -sf "$(pwd)/dist/index.js" "$LINK"
+echo "Linked dist/index.js -> $LINK"

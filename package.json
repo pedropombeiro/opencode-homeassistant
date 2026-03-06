@@ -1,0 +1,50 @@
+{
+  "name": "opencode-homeassistant",
+  "version": "0.1.0",
+  "description": "OpenCode plugin that sends agent status to Home Assistant via webhook",
+  "author": {
+    "name": "Pedro Pombeiro",
+    "email": "pedropombeiro@users.noreply.github.com"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "default": "./dist/index.js"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pedropombeiro/opencode-homeassistant"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "home-assistant",
+    "webhook",
+    "homeassistant"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.0.85"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@opencode-ai/plugin": "1.0.85",
+    "@types/node": "^20.11.5",
+    "bun-types": "1.3.10",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-prettier": "^5.1.3",
+    "prettier": "^3.2.4",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.47.0"
+  }
+}

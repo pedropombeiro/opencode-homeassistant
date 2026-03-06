@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Publish to npm"
+TAG="${1:-latest}"
+npm publish --provenance --access public --tag "$TAG"

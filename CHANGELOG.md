@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.4...opencode-homeassistant-v0.2.5) (2026-03-06)
+
+
+### Bug Fixes
+
+* **ci:** strip authToken from .npmrc for trusted publishing ([0e6d6e1](https://github.com/pedropombeiro/opencode-homeassistant/commit/0e6d6e1e7d4e732cc2384f47b0505825894ad4ba))
+
 ## [0.2.4](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.3...opencode-homeassistant-v0.2.4) (2026-03-06)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "opencode-homeassistant",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "OpenCode plugin that sends agent status to Home Assistant via webhook",
   "author": {
     "name": "Pedro Pombeiro",

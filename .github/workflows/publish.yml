@@ -27,6 +27,11 @@ jobs:
 
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
 
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: lts/*
+          registry-url: https://registry.npmjs.org
+
       - name: Install dependencies
         run: mise run setup
 

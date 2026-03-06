@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.1...opencode-homeassistant-v0.2.2) (2026-03-06)
+
+
+### Bug Fixes
+
+* **ci:** restore setup-node for registry config ([1cb6cd7](https://github.com/pedropombeiro/opencode-homeassistant/commit/1cb6cd75725b3671d572214b2d1f5f5444963bc7))
+
 ## [0.2.1](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.0...opencode-homeassistant-v0.2.1) (2026-03-06)
 
 

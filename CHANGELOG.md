@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.3...opencode-homeassistant-v0.2.4) (2026-03-06)
+
+
+### Bug Fixes
+
+* **ci:** unset NODE_AUTH_TOKEN for OIDC trusted publishing ([a24924d](https://github.com/pedropombeiro/opencode-homeassistant/commit/a24924ddb6c85e28fa4a4ddf13312d66b131232d))
+
 ## [0.2.3](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.2...opencode-homeassistant-v0.2.3) (2026-03-06)
 
 

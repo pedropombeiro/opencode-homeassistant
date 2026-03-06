@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.7](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.6...opencode-homeassistant-v0.2.7) (2026-03-06)
+
+
+### Bug Fixes
+
+* **docs:** link LICENSE file from README ([1437cab](https://github.com/pedropombeiro/opencode-homeassistant/commit/1437cab99f9b02dcf20f5df99c61bf95d9119c94))
+
 ## [0.2.6](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.5...opencode-homeassistant-v0.2.6) (2026-03-06)
 
 

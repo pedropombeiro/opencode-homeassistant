@@ -38,8 +38,5 @@ jobs:
       - name: Build
         run: mise run build
 
-      - name: Strip token from .npmrc for trusted publishing
-        run: sed -i '/_authToken/d' "$NPM_CONFIG_USERCONFIG"
-
       - name: Publish
         run: npm publish --access public --tag ${{ inputs.tag }}

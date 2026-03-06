@@ -113,51 +113,96 @@ automation:
                   entity_id: light.desk_led
 ```
 
-### Mobile notification when waiting for input
+### Track agent status as a template sensor (with attributes)
 
-Get a push notification on your phone whenever the agent needs your attention:
+Rather than an `input_select`, a [trigger-based template sensor](https://www.home-assistant.io/integrations/template/#trigger-based-template-sensors) gives you a richer entity with `hostname`, `project`, and `session_id` as attributes, and lets you implement derived state logic (e.g. promoting `idle` to `completed` when the agent was busy for a while):
 
 ```yaml
-automation:
-  - alias: OpenCode needs attention
-    triggers:
+template:
+  - trigger:
       - trigger: webhook
         webhook_id: your_webhook_id
         allowed_methods:
           - POST
-        local_only: false
+        local_only: true
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.opencode_agent_state
+    sensor:
+      - name: OpenCode Agent Status
+        unique_id: opencode_agent_status
+        device_class: enum
+        state: >
+          {% if trigger.platform == 'event' %}
+            idle
+          {% else %}
+            {% set raw = trigger.json.state %}
+            {% set was_busy_long = raw == 'idle'
+               and this.state == 'busy'
+               and (now() - this.last_changed).total_seconds() >= 10 %}
+            {{ 'completed' if was_busy_long else raw }}
+          {% endif %}
+        attributes:
+          hostname: "{{ trigger.json.hostname | default(this.attributes.get('hostname', '')) }}"
+          project: "{{ trigger.json.project | default(this.attributes.get('project', '')) }}"
+          session_id: "{{ trigger.json.sessionId | default(this.attributes.get('session_id', '')) }}"
+
+timer:
+  opencode_agent_state:
+    name: OpenCode agent state auto-revert
+    duration: "00:00:05"
+
+automation:
+  - alias: OpenCode agent state timer control
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: sensor.opencode_agent_status
+    actions:
+      - if:
+          - condition: state
+            entity_id: sensor.opencode_agent_status
+            state: [error, completed, waiting]
+        then:
+          - action: timer.start
+            target:
+              entity_id: timer.opencode_agent_state
+        else:
+          - action: timer.cancel
+            target:
+              entity_id: timer.opencode_agent_state
+```
+
+The timer ensures transient states (`error`, `waiting`, `completed`) auto-revert to `idle` after 5 seconds. The `completed` state is synthesized when the agent goes from `busy` → `idle` after at least 10 seconds — a signal that a real task finished.
+
+### Mobile notification when waiting for input after a long-running prompt
+
+Get a push notification only when the agent has been working for a while (>30s) and then needs your input — avoiding noise from quick prompts:
+
+```yaml
+automation:
+  - alias: Notify when long-running OpenCode prompt needs input
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.opencode_agent_status
+        from: busy
+        to: waiting
     conditions:
       - condition: template
-        value_template: "{{ trigger.json.state in ['waiting', 'error'] }}"
+        value_template: >
+          {{ (now() - trigger.from_state.last_changed).total_seconds() >= 30 }}
     actions:
       - action: notify.mobile_app_your_phone
         data:
-          title: 'OpenCode — {{ trigger.json.project }} ({{ trigger.json.hostname }})'
-          message: >-
-            {% if trigger.json.state == 'waiting' %}Agent is waiting for your input
-            {% else %}Agent encountered an error{% endif %}
+          title: opencode is waiting for input
+          message: >
+            {{ state_attr('sensor.opencode_agent_status', 'project') }}
+            on {{ state_attr('sensor.opencode_agent_status', 'hostname') }}
 ```
 
-### Track agent status per machine
-
-Store the state in an `input_select` so you can build dashboards or condition other automations on whether the agent is active:
-
-```yaml
-automation:
-  - alias: OpenCode agent status
-    triggers:
-      - trigger: webhook
-        webhook_id: your_webhook_id
-        allowed_methods:
-          - POST
-        local_only: false
-    actions:
-      - action: input_select.select_option
-        target:
-          entity_id: input_select.opencode_status
-        data:
-          option: '{{ trigger.json.state }} — {{ trigger.json.project }} ({{ trigger.json.hostname }})'
-```
+This relies on the trigger-based template sensor described above.
 
 ## License
 

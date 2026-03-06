@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.0...opencode-homeassistant-v0.2.1) (2026-03-06)
+
+
+### Bug Fixes
+
+* **ci:** remove setup-node to let npm OIDC handle auth ([7c11fff](https://github.com/pedropombeiro/opencode-homeassistant/commit/7c11fffa42a1c041a900601e2b8e8b0138e0e27b))
+
 ## [0.2.0](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.1.0...opencode-homeassistant-v0.2.0) (2026-03-06)
 
 

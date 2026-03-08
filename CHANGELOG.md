@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.7...opencode-homeassistant-v0.3.0) (2026-03-08)
+
+
+### Features
+
+* enrich webhook payloads with session duration and waiting details ([4b672cb](https://github.com/pedropombeiro/opencode-homeassistant/commit/4b672cb557201df8d8247d6fa903effed8e7fbd1))
+* hot-reload configuration via the config hook ([58db3c0](https://github.com/pedropombeiro/opencode-homeassistant/commit/58db3c0c96843912fd288274c752f4a4e0680dc4))
+* support per-state webhook routing and multiple targets ([542ca1e](https://github.com/pedropombeiro/opencode-homeassistant/commit/542ca1e4ed8b2d12b999e1d2169f9da2762059a4))
+
 ## [0.2.7](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.6...opencode-homeassistant-v0.2.7) (2026-03-06)
 
 

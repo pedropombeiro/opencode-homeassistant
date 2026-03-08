@@ -64,7 +64,7 @@ function sendWebhook(urls: string[], payload: WebhookPayload): void {
 }
 
 export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
-  const config = loadConfig();
+  let config = loadConfig();
   const project = basename(directory);
   const host = hostname();
   const sessionStartTimes = new Map<string, number>();
@@ -89,6 +89,9 @@ export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
   }
 
   return {
+    config: async () => {
+      config = loadConfig();
+    },
     event: async ({ event }) => {
       if (event.type === 'session.status') {
         const { sessionID, status } = event.properties;

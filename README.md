@@ -9,6 +9,7 @@ An [OpenCode](https://opencode.ai) plugin that sends agent status to [Home Assis
 - Tracks session duration — `idle`, `waiting`, and `error` payloads include `durationMs` (time since the last `busy` event)
 - Per-state webhook routing — send different states to different webhook IDs
 - Multiple webhook targets — send the same state to several Home Assistant instances
+- Hot-reloads configuration when OpenCode's config changes (no restart needed)
 - JSON payload, compatible with Home Assistant's webhook trigger out of the box
 
 ## States
@@ -79,6 +80,8 @@ Create `~/.config/opencode/opencode-homeassistant.json`:
 The config file path can be overridden with the `OPENCODE_HA_CONFIG_PATH` environment variable. See [webhook trigger documentation at Home Assistant](https://www.home-assistant.io/docs/automation/trigger/#webhook-trigger).
 
 If no webhook URLs are configured or the config file is missing, the plugin is disabled silently.
+
+The configuration is hot-reloaded whenever OpenCode's config changes — no restart needed.
 
 ### Per-state webhook routing
 

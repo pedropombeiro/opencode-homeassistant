@@ -4,8 +4,12 @@ import { homedir, hostname } from 'os';
 import { join } from 'path';
 import type { Plugin } from '@opencode-ai/plugin';
 
+type AgentState = 'busy' | 'idle' | 'waiting' | 'error';
+type WebhookUrlEntry = string | string[];
+
 interface Config {
-  webhookUrl: string;
+  webhookUrl?: string;
+  webhookUrls?: Partial<Record<AgentState | 'default', WebhookUrlEntry>>;
 }
 
 interface WaitingDetail {
@@ -34,22 +38,29 @@ function loadConfig(): Config {
       const raw = readFileSync(configPath, 'utf-8');
       return JSON.parse(raw) as Config;
     } catch {
-      return { webhookUrl: '' };
+      return {};
     }
   }
 
-  return { webhookUrl: '' };
+  return {};
 }
 
-function sendWebhook(webhookUrl: string, payload: WebhookPayload): void {
-  if (!webhookUrl) return;
+function resolveWebhookUrls(config: Config, state: AgentState): string[] {
+  const entry = config.webhookUrls?.[state] ?? config.webhookUrls?.default;
+  if (entry) return (Array.isArray(entry) ? entry : [entry]).filter(Boolean);
+  if (config.webhookUrl) return [config.webhookUrl];
+  return [];
+}
 
-  fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(2000),
-  }).catch(() => {});
+function sendWebhook(urls: string[], payload: WebhookPayload): void {
+  for (const url of urls) {
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(2000),
+    }).catch(() => {});
+  }
 }
 
 export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
@@ -65,14 +76,16 @@ export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
   }
 
   function send(
-    state: string,
+    state: AgentState,
     sessionId?: string,
     extra?: { durationMs?: number; waiting?: WaitingDetail },
   ) {
+    const urls = resolveWebhookUrls(config, state);
+    if (urls.length === 0) return;
     const payload: WebhookPayload = { state, hostname: host, project, sessionId };
     if (extra?.durationMs !== undefined) payload.durationMs = extra.durationMs;
     if (extra?.waiting) payload.waiting = extra.waiting;
-    sendWebhook(config.webhookUrl, payload);
+    sendWebhook(urls, payload);
   }
 
   return {

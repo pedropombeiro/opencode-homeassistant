@@ -7,6 +7,8 @@ An [OpenCode](https://opencode.ai) plugin that sends agent status to [Home Assis
 - Notifies Home Assistant when the OpenCode agent becomes busy, idle, waiting, or encounters an error
 - Sends the hostname alongside the state, so you can identify which machine triggered the automation
 - Tracks session duration — `idle`, `waiting`, and `error` payloads include `durationMs` (time since the last `busy` event)
+- Per-state webhook routing — send different states to different webhook IDs
+- Multiple webhook targets — send the same state to several Home Assistant instances
 - JSON payload, compatible with Home Assistant's webhook trigger out of the box
 
 ## States
@@ -76,7 +78,47 @@ Create `~/.config/opencode/opencode-homeassistant.json`:
 
 The config file path can be overridden with the `OPENCODE_HA_CONFIG_PATH` environment variable. See [webhook trigger documentation at Home Assistant](https://www.home-assistant.io/docs/automation/trigger/#webhook-trigger).
 
-If `webhookUrl` is empty or the config file is missing, the plugin is disabled silently.
+If no webhook URLs are configured or the config file is missing, the plugin is disabled silently.
+
+### Per-state webhook routing
+
+Use `webhookUrls` to send different states to different webhook IDs. A `default` key acts as a fallback for any state without its own entry:
+
+```json
+{
+  "webhookUrls": {
+    "busy": "https://ha.local/api/webhook/opencode_busy",
+    "error": "https://ha.local/api/webhook/opencode_error",
+    "default": "https://ha.local/api/webhook/opencode_general"
+  }
+}
+```
+
+With this config, `busy` and `error` events go to their own webhooks while `idle` and `waiting` fall back to the `default` webhook.
+
+### Multiple webhook targets
+
+Each entry in `webhookUrls` can be a single URL or an array, allowing you to notify multiple Home Assistant instances or trigger several automations at once:
+
+```json
+{
+  "webhookUrls": {
+    "default": [
+      "https://ha-home.local/api/webhook/opencode_status",
+      "https://ha-office.local/api/webhook/opencode_status"
+    ],
+    "error": "https://ha-home.local/api/webhook/opencode_errors"
+  }
+}
+```
+
+### Precedence
+
+The plugin resolves webhook URLs in this order:
+
+1. `webhookUrls[state]` — exact match for the current state
+2. `webhookUrls.default` — fallback for unmatched states
+3. `webhookUrl` — legacy single-URL config (used when `webhookUrls` is absent)
 
 ## Automation ideas
 

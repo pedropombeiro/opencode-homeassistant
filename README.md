@@ -6,6 +6,7 @@ An [OpenCode](https://opencode.ai) plugin that sends agent status to [Home Assis
 
 - Notifies Home Assistant when the OpenCode agent becomes busy, idle, waiting, or encounters an error
 - Sends the hostname alongside the state, so you can identify which machine triggered the automation
+- Tracks session duration — `idle`, `waiting`, and `error` payloads include `durationMs` (time since the last `busy` event)
 - JSON payload, compatible with Home Assistant's webhook trigger out of the box
 
 ## States
@@ -24,19 +25,31 @@ The plugin sends a `POST` request with `Content-Type: application/json`:
 
 ```json
 {
-  "state": "busy",
+  "state": "idle",
   "hostname": "my-macbook",
   "project": "my-app",
-  "sessionId": "01JFF..."
+  "sessionId": "01JFF...",
+  "durationMs": 12345
 }
 ```
 
-| Field       | Description                                         |
-| ----------- | --------------------------------------------------- |
-| `state`     | One of `busy`, `idle`, `waiting`, `error`           |
-| `hostname`  | Machine hostname (`os.hostname()`)                  |
-| `project`   | Directory name of the current project               |
-| `sessionId` | OpenCode session ID (useful for correlating events) |
+| Field        | Description                                                                 |
+| ------------ | --------------------------------------------------------------------------- |
+| `state`      | One of `busy`, `idle`, `waiting`, `error`                                   |
+| `hostname`   | Machine hostname (`os.hostname()`)                                          |
+| `project`    | Directory name of the current project                                       |
+| `sessionId`  | OpenCode session ID (useful for correlating events)                         |
+| `durationMs` | Milliseconds since the session became `busy` (omitted from `busy` payloads) |
+| `waiting`    | Details about what the agent is waiting for (only on `waiting` payloads)    |
+
+The `waiting` object has the following fields:
+
+| Field     | Description                                                                      |
+| --------- | -------------------------------------------------------------------------------- |
+| `reason`  | Either `permission` (agent needs approval) or `question` (agent asks a question) |
+| `type`    | Permission type, e.g. `bash`, `file`, `edit` (only for `permission`)             |
+| `title`   | Human-readable description of the request (only for `permission`)                |
+| `pattern` | The command or path pattern being requested (only for `permission`)              |
 
 In a Home Assistant automation, access these values via `trigger.json.*`, e.g. `trigger.json.state`.
 
@@ -147,11 +160,14 @@ template:
           hostname: "{{ trigger.json.hostname | default(this.attributes.get('hostname', '')) }}"
           project: "{{ trigger.json.project | default(this.attributes.get('project', '')) }}"
           session_id: "{{ trigger.json.sessionId | default(this.attributes.get('session_id', '')) }}"
+          duration_ms: '{{ trigger.json.durationMs | default(none) }}'
+          waiting_reason: '{{ trigger.json.waiting.reason | default(none) }}'
+          waiting_title: '{{ trigger.json.waiting.title | default(none) }}'
 
 timer:
   opencode_agent_state:
     name: OpenCode agent state auto-revert
-    duration: "00:00:05"
+    duration: '00:00:05'
 
 automation:
   - alias: OpenCode agent state timer control
@@ -200,9 +216,36 @@ automation:
           message: >
             {{ state_attr('sensor.opencode_agent_status', 'project') }}
             on {{ state_attr('sensor.opencode_agent_status', 'hostname') }}
+            {% if state_attr('sensor.opencode_agent_status', 'waiting_title') %}
+            ({{ state_attr('sensor.opencode_agent_status', 'waiting_title') }})
+            {% endif %}
 ```
 
 This relies on the trigger-based template sensor described above.
+
+### Session duration tracking
+
+Log how long each agent interaction took. The `durationMs` field is included in `idle`, `waiting`, and `error` payloads, measuring the time since the session last became `busy`:
+
+```yaml
+automation:
+  - alias: OpenCode session duration
+    triggers:
+      - trigger: webhook
+        webhook_id: your_webhook_id
+        allowed_methods:
+          - POST
+        local_only: false
+    conditions:
+      - condition: template
+        value_template: '{{ trigger.json.durationMs is defined }}'
+    actions:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.opencode_last_duration_seconds
+        data:
+          value: '{{ (trigger.json.durationMs / 1000) | round(1) }}'
+```
 
 ## License
 

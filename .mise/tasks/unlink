@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#MISE description="Remove local opencode plugin symlink"
+PLUGIN_DIR="$HOME/.config/opencode/plugins"
+LINK="$PLUGIN_DIR/opencode-homeassistant.js"
+if [ -L "$LINK" ]; then
+  rm "$LINK"
+  echo "Removed $LINK"
+  exit 0
+fi
+
+if [ -e "$LINK" ]; then
+  echo "Refusing to remove non-symlink: $LINK" >&2
+  exit 1
+fi
+
+echo "No symlink found at $LINK"

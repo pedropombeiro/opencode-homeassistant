@@ -12,6 +12,7 @@ All tasks are run via mise:
 - `mise run lint:fix` — lint and auto-fix
 - `mise run format` — format with Prettier
 - `mise run link` — symlink `dist/index.js` into `~/.config/opencode/plugins/` for local testing
+- `mise run unlink` — remove the local plugin symlink from `~/.config/opencode/plugins/`
 - `mise run publish` — publish to npm
 
 There are no npm scripts. Do not add a `"scripts"` key to `package.json`.

@@ -123,7 +123,15 @@ export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
     },
     'tool.execute.before': async (input, output) => {
       if (input.tool === 'question') {
-        const questions = output.args?.questions;
+        let args = output.args;
+        if (typeof args === 'string') {
+          try {
+            args = JSON.parse(args);
+          } catch {
+            args = undefined;
+          }
+        }
+        const questions = args?.questions;
         const title = Array.isArray(questions) ? questions[0]?.header : undefined;
         send('waiting', input.sessionID, {
           durationMs: elapsedSince(input.sessionID),

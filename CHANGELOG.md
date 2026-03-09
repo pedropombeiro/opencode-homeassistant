@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.3.0...opencode-homeassistant-v0.3.1) (2026-03-09)
+
+
+### Bug Fixes
+
+* include question title in waiting payload ([3b8ba00](https://github.com/pedropombeiro/opencode-homeassistant/commit/3b8ba0082b6a8696a0126f9a5798a77813adda68))
+
 ## [0.3.0](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.2.7...opencode-homeassistant-v0.3.0) (2026-03-08)
 
 

@@ -121,11 +121,13 @@ export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
         },
       });
     },
-    'tool.execute.before': async (input, _output) => {
+    'tool.execute.before': async (input, output) => {
       if (input.tool === 'question') {
+        const questions = output.args?.questions;
+        const title = Array.isArray(questions) ? questions[0]?.header : undefined;
         send('waiting', input.sessionID, {
           durationMs: elapsedSince(input.sessionID),
-          waiting: { reason: 'question' },
+          waiting: { reason: 'question', title },
         });
       }
     },

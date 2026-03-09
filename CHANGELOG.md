@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.3.1...opencode-homeassistant-v0.3.2) (2026-03-09)
+
+
+### Bug Fixes
+
+* parse question tool args when received as JSON string ([dc6fec3](https://github.com/pedropombeiro/opencode-homeassistant/commit/dc6fec3aa958a4a03cd41d4c9d3ec0ad7bc17f96))
+
 ## [0.3.1](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.3.0...opencode-homeassistant-v0.3.1) (2026-03-09)
 
 

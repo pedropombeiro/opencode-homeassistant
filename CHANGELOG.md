@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.4.1...opencode-homeassistant-v0.4.2) (2026-03-10)
+
+
+### Bug Fixes
+
+* track session start time only on first busy event ([3ae5455](https://github.com/pedropombeiro/opencode-homeassistant/commit/3ae54558a0f572ca34bec1fdf619ab6ebc0c258b))
+
 ## [0.4.1](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.4.0...opencode-homeassistant-v0.4.1) (2026-03-10)
 
 

@@ -263,9 +263,9 @@ automation:
                   entity_id: light.desk_led
 ```
 
-### Track agent status as a template sensor (with attributes)
+### Track agent status as a template sensor (with multi-session support)
 
-Rather than an `input_select`, a [trigger-based template sensor](https://www.home-assistant.io/integrations/template/#trigger-based-template-sensors) gives you a richer entity with `hostname`, `project`, and `session_id` as attributes, and lets you implement derived state logic (e.g. promoting `idle` to `completed` when the agent was busy for a while):
+A [trigger-based template sensor](https://www.home-assistant.io/integrations/template/#trigger-based-template-sensors) gives you a rich entity with attributes and derived state logic. This version tracks multiple concurrent sessions -- one session going idle won't overwrite the state of another still-busy session:
 
 ```yaml
 template:
@@ -284,29 +284,135 @@ template:
         unique_id: opencode_agent_status
         device_class: enum
         state: >
-          {% if trigger.platform == 'event' %}
+          {%- if trigger.platform == 'event' -%}
             idle
-          {% else %}
-            {% set raw = trigger.json.state %}
-            {% set was_busy_long = raw == 'idle'
-               and this.state == 'busy'
-               and (now() - this.last_changed).total_seconds() >= 10 %}
-            {{ 'completed' if was_busy_long else raw }}
-          {% endif %}
+          {%- else -%}
+            {%- set prev = this.attributes.get('sessions', {}) -%}
+            {%- set sid = trigger.json.sessionId | default('unknown') -%}
+            {%- set raw = trigger.json.state -%}
+            {%- set was_busy_long = raw == 'idle'
+                   and prev.get(sid, {}).get('state') == 'busy'
+                   and (trigger.json.durationMs | default(0) | int) >= 10000 -%}
+            {%- set effective = 'completed' if was_busy_long else raw -%}
+            {%- set ns = namespace(states=[]) -%}
+            {%- for k, v in prev.items() if k != sid and v.state != 'idle' -%}
+              {%- set ns.states = ns.states + [v.state] -%}
+            {%- endfor -%}
+            {%- if effective != 'idle' -%}
+              {%- set ns.states = ns.states + [effective] -%}
+            {%- endif -%}
+            {%- if ns.states | length == 0 -%}
+              {{ effective }}
+            {%- else -%}
+              {%- set prio = {'error': 0, 'waiting': 1, 'busy': 2, 'completed': 3} -%}
+              {%- set ns2 = namespace(best='idle', best_prio=99) -%}
+              {%- for s in ns.states -%}
+                {%- if prio.get(s, 50) < ns2.best_prio -%}
+                  {%- set ns2.best = s -%}
+                  {%- set ns2.best_prio = prio.get(s, 50) -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {{ ns2.best }}
+            {%- endif -%}
+          {%- endif -%}
+        icon: >
+          {%- set icons = {
+            'busy': 'mdi:robot-outline',
+            'waiting': 'mdi:robot-confused-outline',
+            'error': 'mdi:robot-dead-outline',
+            'completed': 'mdi:robot-happy-outline',
+          } -%}
+          {{ icons.get(this.state, 'mdi:robot-off-outline') }}
         attributes:
-          hostname: "{{ trigger.json.hostname | default(this.attributes.get('hostname', '')) }}"
-          project: "{{ trigger.json.project | default(this.attributes.get('project', '')) }}"
-          session_id: "{{ trigger.json.sessionId | default(this.attributes.get('session_id', '')) }}"
-          duration_ms: '{{ trigger.json.durationMs | default(none) }}'
-          waiting_reason: '{{ trigger.json.waiting.reason | default(none) }}'
-          waiting_title: '{{ trigger.json.waiting.title | default(none) }}'
-          permission_id: '{{ trigger.json.waiting.id | default(none) }}'
-          question_options: '{{ trigger.json.waiting.questions | default(none) }}'
+          sessions: >
+            {%- if trigger.platform == 'event' -%}
+              {}
+            {%- else -%}
+              {%- set prev = this.attributes.get('sessions', {}) -%}
+              {%- set sid = trigger.json.sessionId | default('unknown') -%}
+              {%- set raw = trigger.json.state -%}
+              {%- set ns = namespace(sessions={}) -%}
+              {%- for k, v in prev.items() if k != sid and v.state != 'idle' -%}
+                {%- set ns.sessions = dict(ns.sessions, **{k: v}) -%}
+              {%- endfor -%}
+              {%- set was_busy_long = raw == 'idle'
+                     and prev.get(sid, {}).get('state') == 'busy'
+                     and (trigger.json.durationMs | default(0) | int) >= 10000 -%}
+              {%- set effective = 'completed' if was_busy_long else raw -%}
+              {%- if effective != 'idle' -%}
+                {%- set entry = {
+                  'state': effective,
+                  'hostname': trigger.json.hostname | default(''),
+                  'project': trigger.json.project | default(''),
+                } -%}
+                {%- set ns.sessions = dict(ns.sessions, **{sid: entry}) -%}
+              {%- endif -%}
+              {{ ns.sessions | to_json }}
+            {%- endif -%}
+          hostname: >
+            {%- if trigger.platform == 'webhook' -%}
+              {{ trigger.json.hostname }}
+            {%- else -%}
+              {{ this.attributes.get('hostname', '') }}
+            {%- endif -%}
+          project: >
+            {%- if trigger.platform == 'webhook' -%}
+              {{ trigger.json.project | default('') }}
+            {%- else -%}
+              {{ this.attributes.get('project', '') }}
+            {%- endif -%}
+          session_id: >
+            {%- if trigger.platform == 'webhook' -%}
+              {{ trigger.json.sessionId | default('') }}
+            {%- else -%}
+              {{ this.attributes.get('session_id', '') }}
+            {%- endif -%}
+          duration_ms: >
+            {%- if trigger.platform == 'webhook' -%}
+              {{ trigger.json.durationMs | default(none) }}
+            {%- else -%}
+              {{ this.attributes.get('duration_ms', none) }}
+            {%- endif -%}
+          waiting_reason: >
+            {%- if trigger.platform == 'webhook' and trigger.json.waiting is defined -%}
+              {{ trigger.json.waiting.reason | default(none) }}
+            {%- elif trigger.platform == 'webhook' -%}
+              {{ none }}
+            {%- else -%}
+              {{ this.attributes.get('waiting_reason', none) }}
+            {%- endif -%}
+          waiting_title: >
+            {%- if trigger.platform == 'webhook' and trigger.json.waiting is defined -%}
+              {{ trigger.json.waiting.title | default(none) }}
+            {%- elif trigger.platform == 'webhook' -%}
+              {{ none }}
+            {%- else -%}
+              {{ this.attributes.get('waiting_title', none) }}
+            {%- endif -%}
+          permission_id: >
+            {%- if trigger.platform == 'webhook' and trigger.json.waiting is defined -%}
+              {{ trigger.json.waiting.id | default(none) }}
+            {%- elif trigger.platform == 'webhook' -%}
+              {{ none }}
+            {%- else -%}
+              {{ this.attributes.get('permission_id', none) }}
+            {%- endif -%}
+          question_options: >
+            {%- if trigger.platform == 'webhook' and trigger.json.waiting is defined
+                  and trigger.json.waiting.questions is defined
+                  and trigger.json.waiting.questions | length > 0
+                  and trigger.json.waiting.questions[0].options is defined -%}
+              {{ trigger.json.waiting.questions[0].options | to_json }}
+            {%- elif trigger.platform == 'webhook' -%}
+              []
+            {%- else -%}
+              {{ this.attributes.get('question_options', []) | to_json }}
+            {%- endif -%}
 
 timer:
   opencode_agent_state:
     name: OpenCode agent state auto-revert
-    duration: '00:00:05'
+    duration: "00:00:05"
 
 automation:
   - alias: OpenCode agent state timer control
@@ -318,7 +424,7 @@ automation:
       - if:
           - condition: state
             entity_id: sensor.opencode_agent_status
-            state: [error, completed, waiting]
+            state: [error, completed]
         then:
           - action: timer.start
             target:
@@ -329,38 +435,173 @@ automation:
               entity_id: timer.opencode_agent_state
 ```
 
-The timer ensures transient states (`error`, `waiting`, `completed`) auto-revert to `idle` after 5 seconds. The `completed` state is synthesized when the agent goes from `busy` → `idle` after at least 10 seconds -- a signal that a real task finished.
+The aggregate state reflects the highest-priority active session (`error` > `waiting` > `busy` > `completed` > `idle`). The `sessions` attribute stores a dict of active sessions keyed by `sessionId`, each with `state`, `hostname`, and `project`.
 
-### Mobile notification when waiting for input after a long-running prompt
+The `completed` state is synthesized when the agent goes from `busy` → `idle` after at least 10 seconds -- a signal that a real task finished. The timer ensures transient states (`error`, `completed`) auto-revert to `idle` after 5 seconds. The `waiting_*` and `permission_id` attributes are cleared when a non-waiting webhook arrives, preventing stale values.
 
-Get a push notification only when the agent has been working for a while (>30s) and then needs your input -- avoiding noise from quick prompts:
+### Actionable mobile notification when waiting for input
+
+Get a push notification with action buttons when the agent has been busy for a while (>30s) and then needs your input. This uses a **separate webhook** so it works independently of the sensor and correctly handles parallel sessions.
+
+**Plugin config** -- route `waiting` payloads to both the sensor and the notification webhook:
+
+```json
+{
+  "webhookUrls": {
+    "default": "https://ha.local/api/webhook/opencode_agent_status",
+    "waiting": [
+      "https://ha.local/api/webhook/opencode_agent_status",
+      "https://ha.local/api/webhook/opencode_agent_notify"
+    ]
+  }
+}
+```
+
+Since `webhookUrls[state]` overrides `default` entirely, the `waiting` entry must include the sensor webhook too.
+
+**HA automation** -- triggers on the notification webhook, reads all data from the payload:
 
 ```yaml
+input_text:
+  opencode_permission_response:
+    name: OpenCode Permission Response
+    initial: ""
+    max: 255
+
 automation:
-  - alias: Notify when long-running OpenCode prompt needs input
-    mode: single
+  - alias: Notify when OpenCode needs input after long-running prompt
+    mode: parallel
+    max: 10
     triggers:
-      - trigger: state
-        entity_id: sensor.opencode_agent_status
-        from: busy
-        to: waiting
+      - trigger: webhook
+        webhook_id: opencode_agent_notify
+        allowed_methods:
+          - POST
+        local_only: true
     conditions:
       - condition: template
         value_template: >
-          {{ (now() - trigger.from_state.last_changed).total_seconds() >= 30 }}
+          {{ trigger.json.state == 'waiting'
+             and (trigger.json.durationMs | default(0) | int) >= 30000 }}
     actions:
-      - action: notify.mobile_app_your_phone
-        data:
-          title: opencode is waiting for input
-          message: >
-            {{ state_attr('sensor.opencode_agent_status', 'project') }}
-            on {{ state_attr('sensor.opencode_agent_status', 'hostname') }}
-            {% if state_attr('sensor.opencode_agent_status', 'waiting_title') %}
-            ({{ state_attr('sensor.opencode_agent_status', 'waiting_title') }})
-            {% endif %}
+      - variables:
+          waiting: "{{ trigger.json.waiting | default({}) }}"
+          waiting_reason: "{{ waiting.reason | default('') }}"
+          is_permission: "{{ waiting_reason == 'permission' }}"
+          is_question: "{{ waiting_reason == 'question' }}"
+          permission_id: "{{ waiting.id | default('') }}"
+          question_options: >
+            {%- if waiting.questions is defined
+                  and waiting.questions | length > 0
+                  and waiting.questions[0].options is defined -%}
+              {{ waiting.questions[0].options }}
+            {%- else -%}
+              []
+            {%- endif -%}
+          action_approve: "{{ 'APPROVE_' ~ context.id }}"
+          action_deny: "{{ 'DENY_' ~ context.id }}"
+          action_always: "{{ 'ALWAYS_' ~ context.id }}"
+      - variables:
+          notification_message: >
+            {{ trigger.json.project | default('unknown') }}
+            on {{ trigger.json.hostname | default('unknown') }}
+            {%- if waiting.title not in [none, ''] %}
+            — {{ waiting.title }}
+            {%- endif %}
+          question_actions: >
+            {%- set opts = question_options if question_options is list else [] -%}
+            {%- set ns = namespace(actions=[]) -%}
+            {%- for opt in opts[:10] -%}
+              {%- set ns.actions = ns.actions + [{"action": "OPT_" ~ loop.index0 ~ "_" ~ context.id, "title": opt.label}] -%}
+            {%- endfor -%}
+            {{ ns.actions }}
+      - choose:
+          - alias: Permission notification
+            conditions: "{{ is_permission }}"
+            sequence:
+              - action: notify.mobile_app_your_phone
+                data:
+                  title: opencode is waiting for input
+                  message: "{{ notification_message }}"
+                  data:
+                    push:
+                      interruption-level: time-sensitive
+                    actions:
+                      - action: "{{ action_approve }}"
+                        title: Approve
+                      - action: "{{ action_deny }}"
+                        title: Deny
+                        destructive: true
+                      - action: "{{ action_always }}"
+                        title: Always Allow
+              - wait_for_trigger:
+                  - trigger: event
+                    event_type: mobile_app_notification_action
+                    event_data:
+                      action: "{{ action_approve }}"
+                  - trigger: event
+                    event_type: mobile_app_notification_action
+                    event_data:
+                      action: "{{ action_deny }}"
+                  - trigger: event
+                    event_type: mobile_app_notification_action
+                    event_data:
+                      action: "{{ action_always }}"
+                timeout: "00:02:00"
+                continue_on_timeout: true
+              - choose:
+                  - alias: Approve
+                    conditions: "{{ wait.trigger is defined and wait.trigger.event.data.action == action_approve }}"
+                    sequence:
+                      - action: input_text.set_value
+                        target:
+                          entity_id: input_text.opencode_permission_response
+                        data:
+                          value: "{{ permission_id }}:allow"
+                  - alias: Always Allow
+                    conditions: "{{ wait.trigger is defined and wait.trigger.event.data.action == action_always }}"
+                    sequence:
+                      - action: input_text.set_value
+                        target:
+                          entity_id: input_text.opencode_permission_response
+                        data:
+                          value: "{{ permission_id }}:always"
+                  - alias: Deny
+                    conditions: "{{ wait.trigger is defined and wait.trigger.event.data.action == action_deny }}"
+                    sequence:
+                      - action: input_text.set_value
+                        target:
+                          entity_id: input_text.opencode_permission_response
+                        data:
+                          value: "{{ permission_id }}:deny"
+          - alias: Question notification with options
+            conditions: "{{ is_question and question_actions | length > 0 }}"
+            sequence:
+              - action: notify.mobile_app_your_phone
+                data:
+                  title: opencode is waiting for input
+                  message: "{{ notification_message }}"
+                  data:
+                    push:
+                      interruption-level: time-sensitive
+                    actions: "{{ question_actions }}"
+        default:
+          - action: notify.mobile_app_your_phone
+            data:
+              title: opencode is waiting for input
+              message: "{{ notification_message }}"
+              data:
+                push:
+                  interruption-level: time-sensitive
 ```
 
-This relies on the trigger-based template sensor described above.
+Key design choices:
+
+- **Dedicated webhook** (`opencode_agent_notify`) -- the automation triggers directly from the webhook payload, not from sensor state changes. This avoids race conditions when multiple sessions are active and ensures `durationMs` is accurate per-session.
+- **`mode: parallel`** -- multiple concurrent sessions can each have their own notification in-flight.
+- **`durationMs >= 30000`** -- uses the plugin's per-session busy timer instead of HA's `last_changed`, which can be inaccurate when sessions overlap.
+- **Permission reply** -- tapping Approve/Deny writes to `input_text.opencode_permission_response` using the format `<permissionId>:<response>`, which the plugin polls for.
+- **Question actions** -- dynamically builds notification buttons from the question's options (up to 10, the iOS limit).
 
 ### Session duration tracking
 
@@ -377,13 +618,13 @@ automation:
         local_only: false
     conditions:
       - condition: template
-        value_template: '{{ trigger.json.durationMs is defined }}'
+        value_template: "{{ trigger.json.durationMs is defined }}"
     actions:
       - action: input_number.set_value
         target:
           entity_id: input_number.opencode_last_duration_seconds
         data:
-          value: '{{ (trigger.json.durationMs / 1000) | round(1) }}'
+          value: "{{ (trigger.json.durationMs / 1000) | round(1) }}"
 ```
 
 ## License

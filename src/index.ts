@@ -220,7 +220,7 @@ export const HomeAssistantPlugin: Plugin = async ({ client, directory }) => {
       if (event.type === 'session.status') {
         const { sessionID, status } = event.properties;
         if (status.type === 'busy') {
-          sessionStartTimes.set(sessionID, Date.now());
+          if (!sessionStartTimes.has(sessionID)) sessionStartTimes.set(sessionID, Date.now());
           send('busy', sessionID);
         } else if (status.type === 'idle') {
           const durationMs = elapsedSince(sessionID);

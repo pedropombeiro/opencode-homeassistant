@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.4.0...opencode-homeassistant-v0.4.1) (2026-03-10)
+
+
+### Bug Fixes
+
+* serialize webhook delivery to prevent busy/waiting race condition ([4012369](https://github.com/pedropombeiro/opencode-homeassistant/commit/4012369facd58ea42e7de2c4ac1c3aa600f48871))
+
 ## [0.4.0](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.3.2...opencode-homeassistant-v0.4.0) (2026-03-10)
 
 

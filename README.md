@@ -47,14 +47,38 @@ The plugin sends a `POST` request with `Content-Type: application/json`:
 
 The `waiting` object has the following fields:
 
-| Field     | Description                                                                      |
-| --------- | -------------------------------------------------------------------------------- |
-| `reason`  | Either `permission` (agent needs approval) or `question` (agent asks a question) |
-| `type`    | Permission type, e.g. `bash`, `file`, `edit` (only for `permission`)             |
-| `title`   | Human-readable description of the request (only for `permission`)                |
-| `pattern` | The command or path pattern being requested (only for `permission`)              |
+| Field       | Description                                                                      |
+| ----------- | -------------------------------------------------------------------------------- |
+| `reason`    | Either `permission` (agent needs approval) or `question` (agent asks a question) |
+| `id`        | Permission ID (only for `permission`)                                            |
+| `type`      | Permission type, e.g. `bash`, `file`, `edit` (only for `permission`)             |
+| `title`     | Human-readable description of the request (only for `permission`)                |
+| `pattern`   | The command or path pattern being requested (only for `permission`)              |
+| `questions` | Question details and options (only for `question`)                               |
 
 In a Home Assistant automation, access these values via `trigger.json.*`, e.g. `trigger.json.state`.
+
+For question prompts, `waiting.questions` contains the prompt text and options:
+
+```json
+{
+  "waiting": {
+    "reason": "question",
+    "title": "Choose framework",
+    "questions": [
+      {
+        "header": "Choose framework",
+        "question": "Which framework would you like to use?",
+        "options": [
+          { "label": "React", "description": "Component-based UI library" },
+          { "label": "Vue", "description": "Progressive framework" }
+        ],
+        "multiple": false
+      }
+    ]
+  }
+}
+```
 
 ## Installation
 

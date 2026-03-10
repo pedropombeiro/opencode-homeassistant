@@ -23,6 +23,19 @@ interface WaitingDetail {
   type?: string;
   title?: string;
   pattern?: string | string[];
+  questions?: QuestionDetail[];
+}
+
+interface QuestionOption {
+  label: string;
+  description?: string;
+}
+
+interface QuestionDetail {
+  header: string;
+  question: string;
+  options: QuestionOption[];
+  multiple?: boolean;
 }
 
 interface WebhookPayload {
@@ -298,11 +311,24 @@ export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
             args = undefined;
           }
         }
-        const questions = args?.questions;
-        const title = Array.isArray(questions) ? questions[0]?.header : undefined;
+        const questions = Array.isArray(args?.questions) ? args.questions : undefined;
+        const title = questions?.[0]?.header;
+        const questionDetails = questions
+          ?.filter((question: QuestionDetail) => Boolean(question?.header || question?.question))
+          .map((question: QuestionDetail) => ({
+            header: question.header ?? '',
+            question: question.question ?? '',
+            options: Array.isArray(question.options)
+              ? question.options.map((option: QuestionOption) => ({
+                  label: option.label,
+                  description: option.description,
+                }))
+              : [],
+            multiple: question.multiple,
+          }));
         send('waiting', input.sessionID, {
           durationMs: elapsedSince(input.sessionID),
-          waiting: { reason: 'question', title },
+          waiting: { reason: 'question', title, questions: questionDetails },
         });
       }
     },

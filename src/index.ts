@@ -83,15 +83,17 @@ function resolveWebhookUrls(config: Config, state: AgentState): string[] {
   return [];
 }
 
-function sendWebhook(urls: string[], payload: WebhookPayload): void {
-  for (const url of urls) {
-    fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(2000),
-    }).catch(() => {});
-  }
+function sendWebhook(urls: string[], payload: WebhookPayload): Promise<void> {
+  return Promise.all(
+    urls.map((url) =>
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(2000),
+      }).catch(() => {}),
+    ),
+  ).then(() => {});
 }
 
 function sleep(ms: number): Promise<void> {
@@ -142,6 +144,7 @@ export const HomeAssistantPlugin: Plugin = async ({ client, directory }) => {
   const host = hostname();
   const sessionStartTimes = new Map<string, number>();
   const repliedPermissions = new Set<string>();
+  const inflightWebhooks = new Map<string, Promise<void>>();
 
   function elapsedSince(sessionId?: string): number | undefined {
     if (!sessionId) return undefined;
@@ -153,13 +156,18 @@ export const HomeAssistantPlugin: Plugin = async ({ client, directory }) => {
     state: AgentState,
     sessionId?: string,
     extra?: { durationMs?: number; waiting?: WaitingDetail },
-  ) {
+  ): Promise<void> {
     const urls = resolveWebhookUrls(config, state);
-    if (urls.length === 0) return;
+    if (urls.length === 0) return Promise.resolve();
     const payload: WebhookPayload = { state, hostname: host, project, sessionId };
     if (extra?.durationMs !== undefined) payload.durationMs = extra.durationMs;
     if (extra?.waiting) payload.waiting = extra.waiting;
-    sendWebhook(urls, payload);
+
+    const key = sessionId ?? '';
+    const previous = inflightWebhooks.get(key) ?? Promise.resolve();
+    const promise = previous.then(() => sendWebhook(urls, payload));
+    inflightWebhooks.set(key, promise);
+    return promise;
   }
 
   function resolveHaConfig(): { apiUrl: string; token: string; entity: string } | undefined {
@@ -235,7 +243,7 @@ export const HomeAssistantPlugin: Plugin = async ({ client, directory }) => {
         const title = props.patterns?.[0]
           ? `${props.permission}: ${props.patterns[0]}`
           : props.permission;
-        send('waiting', props.sessionID, {
+        await send('waiting', props.sessionID, {
           durationMs: elapsedSince(props.sessionID),
           waiting: {
             reason: 'permission',

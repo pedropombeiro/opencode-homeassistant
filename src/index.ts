@@ -10,13 +10,31 @@ type WebhookUrlEntry = string | string[];
 interface Config {
   webhookUrl?: string;
   webhookUrls?: Partial<Record<AgentState | 'default', WebhookUrlEntry>>;
+  haApiUrl?: string;
+  haToken?: string;
+  permissionResponseEntity?: string;
+  permissionTimeout?: number;
 }
 
 interface WaitingDetail {
   reason: 'permission' | 'question';
+  id?: string;
   type?: string;
   title?: string;
   pattern?: string | string[];
+  questions?: QuestionDetail[];
+}
+
+interface QuestionOption {
+  label: string;
+  description?: string;
+}
+
+interface QuestionDetail {
+  header: string;
+  question: string;
+  options: QuestionOption[];
+  multiple?: boolean;
 }
 
 interface WebhookPayload {
@@ -27,6 +45,15 @@ interface WebhookPayload {
   durationMs?: number;
   waiting?: WaitingDetail;
 }
+
+interface HaEntityState {
+  state: string;
+  attributes: Record<string, unknown>;
+}
+
+const DEFAULT_PERMISSION_TIMEOUT = 120;
+const DEFAULT_RESPONSE_ENTITY = 'input_text.opencode_permission_response';
+const POLL_INTERVAL_MS = 2000;
 
 function loadConfig(): Config {
   const configPath =
@@ -43,6 +70,10 @@ function loadConfig(): Config {
   }
 
   return {};
+}
+
+function resolveEnvVars(value: string): string {
+  return value.replace(/\$\{([^}]+)}/g, (_match, name: string) => process.env[name] ?? '');
 }
 
 function resolveWebhookUrls(config: Config, state: AgentState): string[] {
@@ -63,11 +94,54 @@ function sendWebhook(urls: string[], payload: WebhookPayload): void {
   }
 }
 
-export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchHaEntity(
+  apiUrl: string,
+  token: string,
+  entityId: string,
+): Promise<HaEntityState | undefined> {
+  try {
+    const resp = await fetch(`${apiUrl}/states/${entityId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return undefined;
+    return (await resp.json()) as HaEntityState;
+  } catch {
+    return undefined;
+  }
+}
+
+async function setHaEntity(
+  apiUrl: string,
+  token: string,
+  entityId: string,
+  state: string,
+): Promise<void> {
+  try {
+    await fetch(`${apiUrl}/states/${entityId}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ state }),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    /* best effort */
+  }
+}
+
+export const HomeAssistantPlugin: Plugin = async ({ client, directory }) => {
   let config = loadConfig();
   const project = basename(directory);
   const host = hostname();
   const sessionStartTimes = new Map<string, number>();
+  const repliedPermissions = new Set<string>();
 
   function elapsedSince(sessionId?: string): number | undefined {
     if (!sessionId) return undefined;
@@ -86,6 +160,48 @@ export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
     if (extra?.durationMs !== undefined) payload.durationMs = extra.durationMs;
     if (extra?.waiting) payload.waiting = extra.waiting;
     sendWebhook(urls, payload);
+  }
+
+  function resolveHaConfig(): { apiUrl: string; token: string; entity: string } | undefined {
+    if (!config.haApiUrl || !config.haToken) return undefined;
+    const token = resolveEnvVars(config.haToken);
+    if (!token) return undefined;
+    return {
+      apiUrl: config.haApiUrl.replace(/\/+$/, ''),
+      token,
+      entity: config.permissionResponseEntity ?? DEFAULT_RESPONSE_ENTITY,
+    };
+  }
+
+  async function pollForPermissionResponse(
+    permissionId: string,
+  ): Promise<'allow' | 'deny' | undefined> {
+    const ha = resolveHaConfig();
+    if (!ha) return undefined;
+
+    const timeoutMs = (config.permissionTimeout ?? DEFAULT_PERMISSION_TIMEOUT) * 1000;
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() < deadline) {
+      if (repliedPermissions.delete(permissionId)) return undefined;
+
+      const entity = await fetchHaEntity(ha.apiUrl, ha.token, ha.entity);
+      if (entity && entity.state) {
+        const colonIdx = entity.state.indexOf(':');
+        if (colonIdx > 0) {
+          const respPermId = entity.state.substring(0, colonIdx);
+          const response = entity.state.substring(colonIdx + 1);
+          if (respPermId === permissionId) {
+            await setHaEntity(ha.apiUrl, ha.token, ha.entity, '');
+            if (response === 'allow' || response === 'always') return 'allow';
+            if (response === 'deny') return 'deny';
+          }
+        }
+      }
+      await sleep(POLL_INTERVAL_MS);
+    }
+
+    return undefined;
   }
 
   return {
@@ -108,18 +224,44 @@ export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
         const durationMs = elapsedSince(sessionID);
         if (sessionID) sessionStartTimes.delete(sessionID);
         send('error', sessionID, { durationMs });
+      } else if ((event.type as string) === 'permission.asked') {
+        const props = (event as unknown as { properties: Record<string, unknown> }).properties as {
+          id: string;
+          sessionID: string;
+          permission: string;
+          patterns?: string[];
+          metadata?: Record<string, unknown>;
+        };
+        const title = props.patterns?.[0]
+          ? `${props.permission}: ${props.patterns[0]}`
+          : props.permission;
+        send('waiting', props.sessionID, {
+          durationMs: elapsedSince(props.sessionID),
+          waiting: {
+            reason: 'permission',
+            id: props.id,
+            type: props.permission,
+            title,
+            pattern: props.patterns,
+          },
+        });
+
+        const response = await pollForPermissionResponse(props.id);
+        if (response) {
+          const apiResponse = response === 'allow' ? 'once' : 'reject';
+          await client
+            .postSessionIdPermissionsPermissionId({
+              path: { id: props.sessionID, permissionID: props.id },
+              body: { response: apiResponse },
+            })
+            .catch(() => {});
+        }
+      } else if ((event.type as string) === 'permission.replied') {
+        const props = (event as unknown as { properties: Record<string, unknown> }).properties as {
+          permissionID: string;
+        };
+        repliedPermissions.add(props.permissionID);
       }
-    },
-    'permission.ask': async (input, _output) => {
-      send('waiting', input.sessionID, {
-        durationMs: elapsedSince(input.sessionID),
-        waiting: {
-          reason: 'permission',
-          type: input.type,
-          title: input.title,
-          pattern: input.pattern,
-        },
-      });
     },
     'tool.execute.before': async (input, output) => {
       if (input.tool === 'question') {
@@ -131,11 +273,24 @@ export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
             args = undefined;
           }
         }
-        const questions = args?.questions;
-        const title = Array.isArray(questions) ? questions[0]?.header : undefined;
+        const questions = Array.isArray(args?.questions) ? args.questions : undefined;
+        const title = questions?.[0]?.header;
+        const questionDetails = questions
+          ?.filter((question: QuestionDetail) => Boolean(question?.header || question?.question))
+          .map((question: QuestionDetail) => ({
+            header: question.header ?? '',
+            question: question.question ?? '',
+            options: Array.isArray(question.options)
+              ? question.options.map((option: QuestionOption) => ({
+                  label: option.label,
+                  description: option.description,
+                }))
+              : [],
+            multiple: question.multiple,
+          }));
         send('waiting', input.sessionID, {
           durationMs: elapsedSince(input.sessionID),
-          waiting: { reason: 'question', title },
+          waiting: { reason: 'question', title, questions: questionDetails },
         });
       }
     },

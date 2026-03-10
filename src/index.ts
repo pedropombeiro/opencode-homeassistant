@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'fs';
-import { execSync } from 'child_process';
 import { basename } from 'path';
-import { homedir, hostname, platform } from 'os';
+import { homedir, hostname } from 'os';
 import { join } from 'path';
 import type { Plugin } from '@opencode-ai/plugin';
 
@@ -95,64 +94,6 @@ function sendWebhook(urls: string[], payload: WebhookPayload): void {
   }
 }
 
-function isScreenLocked(): boolean {
-  const os = platform();
-
-  if (os === 'darwin') {
-    try {
-      execSync('ioreg -n Root -d1 | grep -q CGSSessionScreenIsLocked', {
-        timeout: 5000,
-        stdio: 'ignore',
-      });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  if (os === 'linux') {
-    try {
-      const out = execSync(
-        "loginctl show-session $(loginctl --no-legend | awk '/seat0/ {print $1; exit}') -p LockedHint --value",
-        { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] },
-      );
-      if (out.trim() === 'yes') return true;
-      if (out.trim() === 'no') return false;
-    } catch {
-      /* fall through to D-Bus */
-    }
-
-    const de = (process.env['XDG_CURRENT_DESKTOP'] ?? '').toLowerCase();
-    const dbusTargets: Record<string, [string, string, string]> = {
-      gnome: ['org.gnome.ScreenSaver', '/org/gnome/ScreenSaver', 'org.gnome.ScreenSaver.GetActive'],
-      kde: ['org.freedesktop.ScreenSaver', '/ScreenSaver', 'org.freedesktop.ScreenSaver.GetActive'],
-      cinnamon: [
-        'org.cinnamon.ScreenSaver',
-        '/org/cinnamon/ScreenSaver',
-        'org.cinnamon.ScreenSaver.GetActive',
-      ],
-      mate: ['org.mate.ScreenSaver', '/org/mate/ScreenSaver', 'org.mate.ScreenSaver.GetActive'],
-      xfce: ['org.xfce.ScreenSaver', '/org/xfce/ScreenSaver', 'org.xfce.ScreenSaver.GetActive'],
-    };
-
-    for (const [key, [dest, path, method]] of Object.entries(dbusTargets)) {
-      if (!de.includes(key)) continue;
-      try {
-        const out = execSync(`dbus-send --session --dest=${dest} --print-reply ${path} ${method}`, {
-          encoding: 'utf8',
-          timeout: 5000,
-          stdio: ['ignore', 'pipe', 'ignore'],
-        });
-        return out.includes('boolean true');
-      } catch {
-        /* continue */
-      }
-    }
-  }
-
-  return false;
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -195,11 +136,12 @@ async function setHaEntity(
   }
 }
 
-export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
+export const HomeAssistantPlugin: Plugin = async ({ client, directory }) => {
   let config = loadConfig();
   const project = basename(directory);
   const host = hostname();
   const sessionStartTimes = new Map<string, number>();
+  const repliedPermissions = new Set<string>();
 
   function elapsedSince(sessionId?: string): number | undefined {
     if (!sessionId) return undefined;
@@ -241,6 +183,8 @@ export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
     const deadline = Date.now() + timeoutMs;
 
     while (Date.now() < deadline) {
+      if (repliedPermissions.delete(permissionId)) return undefined;
+
       const entity = await fetchHaEntity(ha.apiUrl, ha.token, ha.entity);
       if (entity && entity.state) {
         const colonIdx = entity.state.indexOf(':');
@@ -280,25 +224,43 @@ export const HomeAssistantPlugin: Plugin = async ({ directory }) => {
         const durationMs = elapsedSince(sessionID);
         if (sessionID) sessionStartTimes.delete(sessionID);
         send('error', sessionID, { durationMs });
-      }
-    },
-    'permission.ask': async (input, output) => {
-      send('waiting', input.sessionID, {
-        durationMs: elapsedSince(input.sessionID),
-        waiting: {
-          reason: 'permission',
-          id: input.id,
-          type: input.type,
-          title: input.title,
-          pattern: input.pattern,
-        },
-      });
+      } else if ((event.type as string) === 'permission.asked') {
+        const props = (event as unknown as { properties: Record<string, unknown> }).properties as {
+          id: string;
+          sessionID: string;
+          permission: string;
+          patterns?: string[];
+          metadata?: Record<string, unknown>;
+        };
+        const title = props.patterns?.[0]
+          ? `${props.permission}: ${props.patterns[0]}`
+          : props.permission;
+        send('waiting', props.sessionID, {
+          durationMs: elapsedSince(props.sessionID),
+          waiting: {
+            reason: 'permission',
+            id: props.id,
+            type: props.permission,
+            title,
+            pattern: props.patterns,
+          },
+        });
 
-      if (!isScreenLocked()) return;
-
-      const response = await pollForPermissionResponse(input.id);
-      if (response) {
-        output.status = response;
+        const response = await pollForPermissionResponse(props.id);
+        if (response) {
+          const apiResponse = response === 'allow' ? 'once' : 'reject';
+          await client
+            .postSessionIdPermissionsPermissionId({
+              path: { id: props.sessionID, permissionID: props.id },
+              body: { response: apiResponse },
+            })
+            .catch(() => {});
+        }
+      } else if ((event.type as string) === 'permission.replied') {
+        const props = (event as unknown as { properties: Record<string, unknown> }).properties as {
+          permissionID: string;
+        };
+        repliedPermissions.add(props.permissionID);
       }
     },
     'tool.execute.before': async (input, output) => {

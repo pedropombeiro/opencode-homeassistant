@@ -54,6 +54,7 @@ interface HaEntityState {
 const DEFAULT_PERMISSION_TIMEOUT = 120;
 const DEFAULT_RESPONSE_ENTITY = 'input_text.opencode_permission_response';
 const POLL_INTERVAL_MS = 2000;
+const STALE_SESSION_TIMEOUT_MS = 10 * 60 * 1000;
 
 function loadConfig(): Config {
   const configPath =
@@ -165,9 +166,22 @@ export const HomeAssistantPlugin: Plugin = async ({ client, directory }) => {
 
     const key = sessionId ?? '';
     const previous = inflightWebhooks.get(key) ?? Promise.resolve();
-    const promise = previous.then(() => sendWebhook(urls, payload));
+    const promise = previous
+      .then(() => sendWebhook(urls, payload))
+      .finally(() => inflightWebhooks.delete(key));
     inflightWebhooks.set(key, promise);
     return promise;
+  }
+
+  function sweepStaleSessions(now: number): void {
+    for (const [sessionId, start] of sessionStartTimes.entries()) {
+      if (now - start >= STALE_SESSION_TIMEOUT_MS) {
+        const durationMs = now - start;
+        sessionStartTimes.delete(sessionId);
+        inflightWebhooks.delete(sessionId);
+        send('idle', sessionId, { durationMs });
+      }
+    }
   }
 
   function resolveHaConfig(): { apiUrl: string; token: string; entity: string } | undefined {
@@ -220,7 +234,9 @@ export const HomeAssistantPlugin: Plugin = async ({ client, directory }) => {
       if (event.type === 'session.status') {
         const { sessionID, status } = event.properties;
         if (status.type === 'busy') {
-          if (!sessionStartTimes.has(sessionID)) sessionStartTimes.set(sessionID, Date.now());
+          const now = Date.now();
+          sweepStaleSessions(now);
+          if (!sessionStartTimes.has(sessionID)) sessionStartTimes.set(sessionID, now);
           send('busy', sessionID);
         } else if (status.type === 'idle') {
           const durationMs = elapsedSince(sessionID);

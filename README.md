@@ -7,6 +7,7 @@ An [OpenCode](https://opencode.ai) plugin that sends agent status to [Home Assis
 - Notifies Home Assistant when the OpenCode agent becomes busy, idle, waiting, or encounters an error
 - Sends the hostname alongside the state, so you can identify which machine triggered the automation
 - Tracks session duration -- `idle`, `waiting`, and `error` payloads include `durationMs` (time since the last `busy` event)
+- Automatically cleans up sessions stuck in `busy` state after 10 minutes of no activity
 - Per-state webhook routing -- send different states to different webhook IDs
 - Multiple webhook targets -- send the same state to several Home Assistant instances
 - Includes question choices in `waiting` payloads -- HA can render actionable notifications with the available options
@@ -412,7 +413,7 @@ template:
 timer:
   opencode_agent_state:
     name: OpenCode agent state auto-revert
-    duration: "00:00:05"
+    duration: '00:00:05'
 
 automation:
   - alias: OpenCode agent state timer control
@@ -465,7 +466,7 @@ Since `webhookUrls[state]` overrides `default` entirely, the `waiting` entry mus
 input_text:
   opencode_permission_response:
     name: OpenCode Permission Response
-    initial: ""
+    initial: ''
     max: 255
 
 automation:
@@ -485,7 +486,7 @@ automation:
              and (trigger.json.durationMs | default(0) | int) >= 30000 }}
     actions:
       - variables:
-          waiting: "{{ trigger.json.waiting | default({}) }}"
+          waiting: '{{ trigger.json.waiting | default({}) }}'
           waiting_reason: "{{ waiting.reason | default('') }}"
           is_permission: "{{ waiting_reason == 'permission' }}"
           is_question: "{{ waiting_reason == 'question' }}"
@@ -517,79 +518,79 @@ automation:
             {{ ns.actions }}
       - choose:
           - alias: Permission notification
-            conditions: "{{ is_permission }}"
+            conditions: '{{ is_permission }}'
             sequence:
               - action: notify.mobile_app_your_phone
                 data:
                   title: opencode is waiting for input
-                  message: "{{ notification_message }}"
+                  message: '{{ notification_message }}'
                   data:
                     push:
                       interruption-level: time-sensitive
                     actions:
-                      - action: "{{ action_approve }}"
+                      - action: '{{ action_approve }}'
                         title: Approve
-                      - action: "{{ action_deny }}"
+                      - action: '{{ action_deny }}'
                         title: Deny
                         destructive: true
-                      - action: "{{ action_always }}"
+                      - action: '{{ action_always }}'
                         title: Always Allow
               - wait_for_trigger:
                   - trigger: event
                     event_type: mobile_app_notification_action
                     event_data:
-                      action: "{{ action_approve }}"
+                      action: '{{ action_approve }}'
                   - trigger: event
                     event_type: mobile_app_notification_action
                     event_data:
-                      action: "{{ action_deny }}"
+                      action: '{{ action_deny }}'
                   - trigger: event
                     event_type: mobile_app_notification_action
                     event_data:
-                      action: "{{ action_always }}"
-                timeout: "00:02:00"
+                      action: '{{ action_always }}'
+                timeout: '00:02:00'
                 continue_on_timeout: true
               - choose:
                   - alias: Approve
-                    conditions: "{{ wait.trigger is defined and wait.trigger.event.data.action == action_approve }}"
+                    conditions: '{{ wait.trigger is defined and wait.trigger.event.data.action == action_approve }}'
                     sequence:
                       - action: input_text.set_value
                         target:
                           entity_id: input_text.opencode_permission_response
                         data:
-                          value: "{{ permission_id }}:allow"
+                          value: '{{ permission_id }}:allow'
                   - alias: Always Allow
-                    conditions: "{{ wait.trigger is defined and wait.trigger.event.data.action == action_always }}"
+                    conditions: '{{ wait.trigger is defined and wait.trigger.event.data.action == action_always }}'
                     sequence:
                       - action: input_text.set_value
                         target:
                           entity_id: input_text.opencode_permission_response
                         data:
-                          value: "{{ permission_id }}:always"
+                          value: '{{ permission_id }}:always'
                   - alias: Deny
-                    conditions: "{{ wait.trigger is defined and wait.trigger.event.data.action == action_deny }}"
+                    conditions: '{{ wait.trigger is defined and wait.trigger.event.data.action == action_deny }}'
                     sequence:
                       - action: input_text.set_value
                         target:
                           entity_id: input_text.opencode_permission_response
                         data:
-                          value: "{{ permission_id }}:deny"
+                          value: '{{ permission_id }}:deny'
           - alias: Question notification with options
-            conditions: "{{ is_question and question_actions | length > 0 }}"
+            conditions: '{{ is_question and question_actions | length > 0 }}'
             sequence:
               - action: notify.mobile_app_your_phone
                 data:
                   title: opencode is waiting for input
-                  message: "{{ notification_message }}"
+                  message: '{{ notification_message }}'
                   data:
                     push:
                       interruption-level: time-sensitive
-                    actions: "{{ question_actions }}"
+                    actions: '{{ question_actions }}'
         default:
           - action: notify.mobile_app_your_phone
             data:
               title: opencode is waiting for input
-              message: "{{ notification_message }}"
+              message: '{{ notification_message }}'
               data:
                 push:
                   interruption-level: time-sensitive
@@ -618,13 +619,13 @@ automation:
         local_only: false
     conditions:
       - condition: template
-        value_template: "{{ trigger.json.durationMs is defined }}"
+        value_template: '{{ trigger.json.durationMs is defined }}'
     actions:
       - action: input_number.set_value
         target:
           entity_id: input_number.opencode_last_duration_seconds
         data:
-          value: "{{ (trigger.json.durationMs / 1000) | round(1) }}"
+          value: '{{ (trigger.json.durationMs / 1000) | round(1) }}'
 ```
 
 ## License

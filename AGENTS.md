@@ -13,9 +13,7 @@ All tasks are run via mise:
 - `mise run format` — format with Prettier
 - `mise run link` — symlink `dist/index.js` into `~/.config/opencode/plugins/` for local testing
 - `mise run unlink` — remove the local plugin symlink from `~/.config/opencode/plugins/`
-- `mise run publish` — publish to npm
-
-There are no npm scripts. Do not add a `"scripts"` key to `package.json`.
+  There are no npm scripts. Do not add a `"scripts"` key to `package.json`.
 
 ## Code style
 
@@ -28,3 +26,14 @@ There are no npm scripts. Do not add a `"scripts"` key to `package.json`.
 ## Testing
 
 There are no automated tests for this plugin. Verify by running `mise run build` and `mise run typecheck` successfully.
+
+## Releasing
+
+Releases are fully automated via [release-please](https://github.com/googleapis/release-please) and GitHub Actions. **Do NOT manually bump the version in `package.json` or `.release-please-manifest.json`.**
+
+1. Push commits to `main` using [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `fix:`, `feat:`, `chore:`).
+2. The `Release` workflow runs release-please, which creates/updates a release PR (titled `chore(main): release opencode-homeassistant <version>`). The PR bumps `package.json`, updates the manifest, and generates a changelog.
+3. Merge the release PR.
+4. Release-please creates a GitHub Release and tag, which triggers the `Publish` workflow to build and publish to npm.
+
+To publish, simply merge the release-please PR — no manual `npm publish` or version edits needed.

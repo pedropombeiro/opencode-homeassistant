@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.3](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.4.2...opencode-homeassistant-v0.4.3) (2026-03-11)
+
+
+### Bug Fixes
+
+* revert manual version bump (release-please manages versions) ([48807c2](https://github.com/pedropombeiro/opencode-homeassistant/commit/48807c2e764c0b83d455d7a6e7cc99f4f15153cf))
+* sweep stale busy sessions after 10 minutes of inactivity ([8bd0e85](https://github.com/pedropombeiro/opencode-homeassistant/commit/8bd0e856d35521d96f8b3e283c75082d90b5e3be))
+
 ## [0.4.2](https://github.com/pedropombeiro/opencode-homeassistant/compare/opencode-homeassistant-v0.4.1...opencode-homeassistant-v0.4.2) (2026-03-10)
 
 
